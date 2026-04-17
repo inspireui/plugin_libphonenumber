@@ -1,6 +1,22 @@
+// Wasm-compat web implementation of libphonenumber.
+//
+// The upstream `libphonenumber_web` relies on the `libphonenumber.js`
+// global loaded in index.html, talking to it via `package:js`'s
+// `@JS()` annotations. That interop doesn't compile to WebAssembly
+// (dart:_js_annotations + dart:js_util are JS-only), so this fork
+// replaces the entire bridge with pure-Dart fallbacks.
+//
+// Runtime behaviour on web: phone formatting / validation are best-effort
+// stubs — they return the input unchanged and treat any 7-15 digit number
+// as valid. Mobile builds still use the native platform channel in
+// libphonenumber_platform_interface for real parsing.
+//
+// Only users who specifically need live phone-number format validation on
+// the web target are affected. This fork prioritises dart2wasm compile over
+// that edge feature.
+
 import 'package:flutter_web_plugins/flutter_web_plugins.dart';
 import 'package:libphonenumber_platform_interface/libphonenumber_platform_interface.dart';
-import 'package:libphonenumber_web/src/interop/libphonenumber_interop.dart';
 
 class LibPhoneNumberPlugin extends LibPhoneNumberPlatform {
   static void registerWith(Registrar registrar) {
@@ -8,102 +24,48 @@ class LibPhoneNumberPlugin extends LibPhoneNumberPlatform {
   }
 
   @override
-  Future<String?> formatAsYouType(String phoneNumber, String isoCode) async {
-    AsYouTypeFormatterJsImpl phoneUtilJsImpl =
-        AsYouTypeFormatterJsImpl(isoCode.toUpperCase());
-    String? result;
-
-    for (int i = 0; i < phoneNumber.length; i++) {
-      result = phoneUtilJsImpl.inputDigit(phoneNumber[i]);
-    }
-
-    return result;
+  Future<bool?> isValidPhoneNumber(String phoneNumber, String isoCode) async {
+    final digits = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    return digits.length >= 7 && digits.length <= 15;
   }
 
   @override
-  Future<int?> getNumberType(String phoneNumber, String isoCode) async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-    PhoneNumberJsImpl phoneNumberJsImpl =
-        phoneUtilJsImpl.parse(phoneNumber, isoCode.toUpperCase());
-
-    int index = phoneUtilJsImpl.getNumberType(phoneNumberJsImpl);
-
-    return index;
+  Future<String?> normalizePhoneNumber(
+      String phoneNumber, String isoCode) async {
+    final hasPlus = phoneNumber.trimLeft().startsWith('+');
+    final digits = phoneNumber.replaceAll(RegExp(r'\D'), '');
+    return hasPlus ? '+$digits' : digits;
   }
 
   @override
   Future<Map<String, dynamic>?> getRegionInfo(
       String phoneNumber, String isoCode) async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-    PhoneNumberJsImpl phoneNumberJsImpl =
-        phoneUtilJsImpl.parse(phoneNumber, isoCode.toUpperCase());
-
-    String regionCode =
-        phoneUtilJsImpl.getRegionCodeForNumber(phoneNumberJsImpl);
-    String countryCode = phoneNumberJsImpl.getCountryCode().toString();
-    String formattedNumber = phoneUtilJsImpl.format(
-        phoneNumberJsImpl, PhoneNumberFormat.NATIONAL.value);
-
-    RegionInfo info = RegionInfo(
-        regionPrefix: countryCode,
-        isoCode: regionCode,
-        formattedPhoneNumber: formattedNumber);
-
-    return info.toJson();
+    return RegionInfo(
+      isoCode: isoCode.toUpperCase(),
+      regionPrefix: '',
+      formattedPhoneNumber: phoneNumber,
+    ).toMap();
   }
 
   @override
-  Future<bool?> isValidPhoneNumber(String phoneNumber, String isoCode) async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-    PhoneNumberJsImpl phoneNumberJsImpl =
-        phoneUtilJsImpl.parse(phoneNumber, isoCode.toUpperCase());
-
-    return phoneUtilJsImpl.isValidNumber(phoneNumberJsImpl);
+  Future<int?> getNumberType(String phoneNumber, String isoCode) async {
+    // 0 = FIXED_LINE / UNKNOWN — safest no-op default.
+    return 0;
   }
 
   @override
-  Future<String?> normalizePhoneNumber(
-      String phoneNumber, String isoCode, [PhoneNumberFormat format = PhoneNumberFormat.E164]) async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-    PhoneNumberJsImpl phoneNumberJsImpl =
-        phoneUtilJsImpl.parse(phoneNumber, isoCode.toUpperCase());
-
-    String normalized =
-        phoneUtilJsImpl.format(phoneNumberJsImpl, format.value);
-
-    return normalized;
+  Future<String?> formatAsYouType(String phoneNumber, String isoCode) async {
+    return phoneNumber;
   }
 
   @override
   Future<List<String>?> getAllCountries() async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-
-    final allCountries = phoneUtilJsImpl
-        .getSupportedRegions()
-        .map<String>((e) => e as String)
-        .toList();
-
-    return allCountries;
+    return const <String>[];
   }
 
   @override
   Future<String?> getFormattedExampleNumber(
-    String isoCode,
-    PhoneNumberType type,
-    PhoneNumberFormat format,
-  ) async {
-    PhoneNumberUtilJsImpl phoneUtilJsImpl = PhoneNumberUtilJsImpl.getInstance();
-
-    PhoneNumberJsImpl exampleNumber = phoneUtilJsImpl.getExampleNumberForType(
-      isoCode,
-      type.value,
-    );
-
-    String formattedExampleNumber = phoneUtilJsImpl.format(
-      exampleNumber,
-      format.value,
-    );
-
-    return formattedExampleNumber;
+      String isoCode, PhoneNumberType phoneNumberType) async {
+    return '';
   }
 }
