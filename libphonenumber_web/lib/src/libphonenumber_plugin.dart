@@ -30,8 +30,8 @@ class LibPhoneNumberPlugin extends LibPhoneNumberPlatform {
   }
 
   @override
-  Future<String?> normalizePhoneNumber(
-      String phoneNumber, String isoCode) async {
+  Future<String?> normalizePhoneNumber(String phoneNumber, String isoCode,
+      [PhoneNumberFormat format = PhoneNumberFormat.E164]) async {
     final hasPlus = phoneNumber.trimLeft().startsWith('+');
     final digits = phoneNumber.replaceAll(RegExp(r'\D'), '');
     return hasPlus ? '+$digits' : digits;
@@ -44,7 +44,7 @@ class LibPhoneNumberPlugin extends LibPhoneNumberPlatform {
       isoCode: isoCode.toUpperCase(),
       regionPrefix: '',
       formattedPhoneNumber: phoneNumber,
-    ).toMap();
+    ).toJson();
   }
 
   @override
@@ -65,7 +65,7 @@ class LibPhoneNumberPlugin extends LibPhoneNumberPlatform {
 
   @override
   Future<String?> getFormattedExampleNumber(
-      String isoCode, PhoneNumberType phoneNumberType) async {
+      String isoCode, PhoneNumberType type, PhoneNumberFormat format) async {
     return '';
   }
 }
